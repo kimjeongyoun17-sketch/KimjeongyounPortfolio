@@ -42,42 +42,29 @@ body {
     -webkit-user-drag: none;
 }
 
+/* ===== bubble layer ===== */
 .bubble-layer {
     position: fixed;
     inset: 0;
     z-index: 50;
     pointer-events: none;
+
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.6s ease-out, visibility 0s linear 0.6s;
+    transition: opacity 0.35s ease-out, visibility 0s linear 0.35s;
 }
 
 .bubble-layer.show {
     opacity: 1;
     visibility: visible;
-    transition: opacity 0.6s ease-out, visibility 0s;
+    transition: opacity 0.35s ease-out, visibility 0s;
 }
 
-body.is-sliding .bubble-layer {
-    opacity: 0 !important;
-    visibility: hidden !important;
-    transition: opacity 0.25s ease-out, visibility 0s linear 0.25s !important;
-}
-
+/* ===== bubble 기본 ===== */
 .bubble {
     position: absolute;
-    transform: translate(-50%, -50%) scale(0.98);
-    filter: blur(2px);
-    opacity: 0;
-    transition: opacity 0.7s ease-out, transform 0.7s ease-out, filter 0.7s ease-out;
-    animation: floatY var(--t, 7.5s) ease-in-out var(--d, 0s) infinite;
-    will-change: transform;
-}
-
-.bubble-layer.show .bubble {
+    transform: translate(-50%, -50%);
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-    filter: blur(0);
 }
 
 .bubble img {
@@ -86,13 +73,21 @@ body.is-sliding .bubble-layer {
     height: auto;
 }
 
+/* ✅ main(0) & fin(14)에서만 JS가 .float 붙여줌 → 둥둥 */
+.bubble-layer.float .bubble {
+    animation: floatY var(--t, 7.5s) ease-in-out var(--d, 0s) infinite;
+    will-change: transform;
+}
+
 @keyframes floatY {
     0% {
         transform: translate(-50%, -50%) translateY(0);
     }
+
     50% {
         transform: translate(-50%, -50%) translateY(calc(var(--amp, 24px) * -1));
     }
+
     100% {
         transform: translate(-50%, -50%) translateY(0);
     }
