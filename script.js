@@ -15,6 +15,9 @@ document.addEventListener("DOMContentLoaded", () => {
   let current = 0;
   let locked = false;
 
+  // ✅ 팝업 열기 전 포커스 저장
+  let lastFocusedEl = null;
+
   const bubbleSets = {
     [MAIN_IDX]: [
       { src: "images/main_01.png", x: "29.43%", y: "15.01%" },
@@ -95,118 +98,73 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // =========================
-  // Popup
+  // Popup (show 클래스로 토글 + no-scroll 적용)
   // =========================
   function hasPopupUI() {
     return popup && popupDim && popupFrame;
   }
 
   function isPopupOpen() {
-    return hasPopupUI() && popup.style.display === "block";
-  }
-
-  function resetPopupSize() {
-    if (!popup) return;
-    popup.style.width = "";
-    popup.style.height = "";
-  }
-
-  // ✅ 핵심: (가로=이미지 원본) 최대한 유지 + 세로는 92vh 안으로 맞춤
-  function resizePopupToNatural(nw, nh) {
-    if (!popup) return;
-
-    const maxW = Math.floor(window.innerWidth * 0.92);
-    const maxH = Math.floor(window.innerHeight * 0.92);
-
-    let w = nw;
-    let h = nh;
-
-    const scale = Math.min(maxW / w, maxH / h, 1);
-    w = Math.floor(w * scale);
-    h = Math.floor(h * scale);
-
-    popup.style.width = `${w}px`;
-    popup.style.height = `${h}px`;
-  }
-
-  // ✅ iframe 내부 문서에서 img를 찾아 natural size로 팝업 크기 맞춤 (same-origin이어야 함)
-  function tryAutoResizeFromIframe() {
-    if (!hasPopupUI()) return;
-
-    try {
-      const doc =
-        popupFrame.contentDocument || popupFrame.contentWindow?.document;
-      if (!doc) return;
-
-      const img = doc.querySelector("img");
-      if (!img) return;
-
-      const apply = () => {
-        const nw = img.naturalWidth || img.width;
-        const nh = img.naturalHeight || img.height;
-        if (nw && nh) resizePopupToNatural(nw, nh);
-      };
-
-      if (img.complete) apply();
-      else img.addEventListener("load", apply, { once: true });
-
-      // 혹시 DOM이 늦게 생기는 케이스 보완
-      setTimeout(() => {
-        const img2 = doc.querySelector("img");
-        if (!img2) return;
-        const nw = img2.naturalWidth || img2.width;
-        const nh = img2.naturalHeight || img2.height;
-        if (nw && nh) resizePopupToNatural(nw, nh);
-      }, 200);
-    } catch (e) {
-      // cross-origin이면 접근 불가 → 자동 리사이즈 불가(이 경우 more파일을 같은 폴더에 둬야 함)
-    }
+    return hasPopupUI() && popup.classList.contains("show");
   }
 
   function openPopup(url) {
-    if (!hasPopupUI()) return;
+    if (!hasPopupUI() || !url) return;
 
+    // ✅ 포커스 저장
+    lastFocusedEl = document.activeElement;
+
+    // ✅ 구슬 숨기기
     hideBubbles();
-    resetPopupSize();
 
+    // ✅ iframe 로드
     popupFrame.src = url;
 
-    popup.style.display = "block";
-    popupDim.style.display = "block";
+    // ✅ show로 열기
+    popup.classList.add("show");
+    popupDim.classList.add("show");
     popup.setAttribute("aria-hidden", "false");
     popupDim.setAttribute("aria-hidden", "false");
 
-    popupFrame.onload = () => {
-      tryAutoResizeFromIframe();
-    };
+    // ✅ 뒤 스크롤 잠금
+    document.documentElement.classList.add("no-scroll");
+    document.body.classList.add("no-scroll");
 
     if (popupClose) popupClose.focus();
   }
 
-  function closePopup() {
+  // ✅ restoreBubbles 옵션 추가 (뒤로가기/이동 시 깜빡임 방지)
+  function closePopup({ restoreBubbles = true, returnFocus = true } = {}) {
     if (!hasPopupUI()) return;
 
-    popupFrame.onload = null;
-    popupFrame.src = "";
-
-    popup.style.display = "none";
-    popupDim.style.display = "none";
+    // ✅ show로 닫기
+    popup.classList.remove("show");
+    popupDim.classList.remove("show");
     popup.setAttribute("aria-hidden", "true");
     popupDim.setAttribute("aria-hidden", "true");
 
-    showBubblesNow(current);
+    // ✅ 뒤 스크롤 해제
+    document.documentElement.classList.remove("no-scroll");
+    document.body.classList.remove("no-scroll");
+
+    // ✅ iframe 비우기
+    popupFrame.src = "";
+
+    // ✅ 구슬 복구(옵션)
+    if (restoreBubbles) showBubblesNow(current);
+
+    // ✅ 포커스 복귀(옵션)
+    if (returnFocus && lastFocusedEl && typeof lastFocusedEl.focus === "function") {
+      lastFocusedEl.focus();
+      lastFocusedEl = null;
+    }
   }
 
-  if (popupClose) popupClose.addEventListener("click", closePopup);
-  if (popupDim) popupDim.addEventListener("click", closePopup);
+  if (popupClose) popupClose.addEventListener("click", () => closePopup());
+  if (popupDim) popupDim.addEventListener("click", () => closePopup());
 
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && isPopupOpen()) closePopup();
-  });
-
-  window.addEventListener("resize", () => {
-    if (!isPopupOpen()) return;
-    tryAutoResizeFromIframe();
   });
 
   // =========================
@@ -216,6 +174,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (locked) return;
     if (idx < 0 || idx >= TOTAL) return;
     if (idx === current) return;
+
+    // ✅ 팝업 열려있으면 먼저 닫고(구슬 복구는 안 함)
+    if (isPopupOpen()) closePopup({ restoreBubbles: false, returnFocus: false });
 
     locked = true;
     current = idx;
@@ -275,7 +236,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   window.addEventListener("popstate", (e) => {
-    if (isPopupOpen()) closePopup();
+    // ✅ 뒤로가기 때 팝업이 열려있으면: 구슬 복구 없이 닫기(깜빡임 방지)
+    if (isPopupOpen()) closePopup({ restoreBubbles: false, returnFocus: false });
 
     const idx = e.state?.idx;
     if (typeof idx === "number") return go(idx, true, false);
@@ -373,7 +335,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // =========================
-  // Wheel navigation (popup 열리면 막기)
+  // Wheel navigation
   // =========================
   window.addEventListener(
     "wheel",
@@ -384,7 +346,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (e.deltaY > 0 && current < TOTAL - 1) go(current + 1, true, true);
       if (e.deltaY < 0 && current > 0) go(current - 1, true, true);
     },
-    { passive: true },
+    { passive: true }
   );
 
   initFromHash();
