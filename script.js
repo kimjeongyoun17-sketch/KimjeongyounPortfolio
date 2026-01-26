@@ -8,9 +8,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const popupFrame = document.getElementById("popupFrame");
   const popupClose = document.getElementById("popupClose");
 
-  const TOTAL = 15;
+  // ✅ 16장 기준 (sub09 포함)
+  const TOTAL = 16;
   const MAIN_IDX = 0;
-  const FIN_IDX = 14;
+  const FIN_IDX = 15;
 
   let current = 0;
   let locked = false;
@@ -98,7 +99,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // =========================
-  // Popup (show 클래스로 토글 + no-scroll 적용)
+  // Popup
   // =========================
   function hasPopupUI() {
     return popup && popupDim && popupFrame;
@@ -111,49 +112,37 @@ document.addEventListener("DOMContentLoaded", () => {
   function openPopup(url) {
     if (!hasPopupUI() || !url) return;
 
-    // ✅ 포커스 저장
     lastFocusedEl = document.activeElement;
 
-    // ✅ 구슬 숨기기
     hideBubbles();
-
-    // ✅ iframe 로드
     popupFrame.src = url;
 
-    // ✅ show로 열기
     popup.classList.add("show");
     popupDim.classList.add("show");
     popup.setAttribute("aria-hidden", "false");
     popupDim.setAttribute("aria-hidden", "false");
 
-    // ✅ 뒤 스크롤 잠금
     document.documentElement.classList.add("no-scroll");
     document.body.classList.add("no-scroll");
 
     if (popupClose) popupClose.focus();
   }
 
-  // ✅ restoreBubbles 옵션 추가 (뒤로가기/이동 시 깜빡임 방지)
   function closePopup({ restoreBubbles = true, returnFocus = true } = {}) {
     if (!hasPopupUI()) return;
 
-    // ✅ show로 닫기
     popup.classList.remove("show");
     popupDim.classList.remove("show");
     popup.setAttribute("aria-hidden", "true");
     popupDim.setAttribute("aria-hidden", "true");
 
-    // ✅ 뒤 스크롤 해제
     document.documentElement.classList.remove("no-scroll");
     document.body.classList.remove("no-scroll");
 
-    // ✅ iframe 비우기
     popupFrame.src = "";
 
-    // ✅ 구슬 복구(옵션)
     if (restoreBubbles) showBubblesNow(current);
 
-    // ✅ 포커스 복귀(옵션)
     if (returnFocus && lastFocusedEl && typeof lastFocusedEl.focus === "function") {
       lastFocusedEl.focus();
       lastFocusedEl = null;
@@ -167,6 +156,27 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Escape" && isPopupOpen()) closePopup();
   });
 
+  // ✅ 팝업 열렸을 때: 슬라이드 이동용 wheel만 막고,
+  //    팝업(iframe) 내부 스크롤은 그대로 살림
+  window.addEventListener(
+    "wheel",
+    (e) => {
+      if (!isPopupOpen()) return;
+
+      // wheel이 popup/iframe 내부에서 발생하면 막지 않음
+      const t = e.target;
+      const inPopup =
+        popup.contains(t) ||
+        t === popupFrame ||
+        (t && t.ownerDocument && t.ownerDocument.defaultView && t.ownerDocument.defaultView.frameElement === popupFrame);
+
+      if (inPopup) return;
+
+      e.preventDefault(); // ✅ 바깥(슬라이드)에서만 차단
+    },
+    { passive: false, capture: true }
+  );
+
   // =========================
   // Slide navigation
   // =========================
@@ -175,7 +185,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (idx < 0 || idx >= TOTAL) return;
     if (idx === current) return;
 
-    // ✅ 팝업 열려있으면 먼저 닫고(구슬 복구는 안 함)
     if (isPopupOpen()) closePopup({ restoreBubbles: false, returnFocus: false });
 
     locked = true;
@@ -236,7 +245,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   window.addEventListener("popstate", (e) => {
-    // ✅ 뒤로가기 때 팝업이 열려있으면: 구슬 복구 없이 닫기(깜빡임 방지)
     if (isPopupOpen()) closePopup({ restoreBubbles: false, returnFocus: false });
 
     const idx = e.state?.idx;
@@ -324,18 +332,22 @@ document.addEventListener("DOMContentLoaded", () => {
         return go(Number(m[1]), true, true);
       }
 
+      // ✅ stay도 hash로 기록되게 지원 (#stay9 같은 거)
       const s = href.match(/^#stay(\d+)$/);
       if (s) {
         e.preventDefault();
         const target = Number(s[1]);
-        if (target === current) return;
+        if (target === current) {
+          history.pushState({ idx: target }, "", `#p${target}`);
+          return;
+        }
         return go(target, false, true);
       }
     });
   });
 
   // =========================
-  // Wheel navigation
+  // Wheel navigation (슬라이드 이동)
   // =========================
   window.addEventListener(
     "wheel",
